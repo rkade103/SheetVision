@@ -1,5 +1,7 @@
 ## Sheet Vision
 
+*** This version of sheet reader has been adapted for the needs of the uottawa piano lab by Rawaz Kader Kahraman***
+
 Sheet Vision is a python program which reads sheet music and turns it into midi files.
 
 ![image](https://cloud.githubusercontent.com/assets/7611406/17604255/9819f878-5fef-11e6-8f49-865d07284803.png)

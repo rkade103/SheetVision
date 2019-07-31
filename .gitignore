@@ -87,3 +87,13 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+#All generated images
+flat_recs_img.png
+half_recs_img.png
+quarter_recs_img.png
+res.png
+sharp_recs_img.png
+staff_boxes_img.png
+staff_recs_img.png
+whoe_recs_img.png
