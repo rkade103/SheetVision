@@ -34,11 +34,11 @@ class Sheet_Reader(tk.Frame):
 
         #Create a quit button and place it.
         self.quitButton = tk.Button(self, text="Quit", command=self.client_exit)
-        self.quitButton.place(x=400, y=115)
+        self.quitButton.place(x=400, y=140)
 
         #Create a generate button and place it.
         self.generateButton = tk.Button(self, text="Generate", command=self.generate_sheet)
-        self.generateButton.place(x=175, y=115)
+        self.generateButton.place(x=175, y=140)
 
     def client_exit(self):
         sys.exit()
@@ -48,7 +48,7 @@ class Sheet_Reader(tk.Frame):
                                 " will be used by the Midi Analyzer. Supply an image of the line as well as a model file" +
                                 " that represents a perfect run-through, and this tool will generate the excerpt sheet for you!").grid(row=0, columnspan=3)
 
-        ''
+        
         tk.Label(self, text="Excerpt Picture:").grid(row=4, column=0)
         self.picEntry = tk.Entry(self, width=70)
         self.picEntry.grid(row=4, column=1)
@@ -60,6 +60,13 @@ class Sheet_Reader(tk.Frame):
         self.midiEntry.grid(row=5, column=1)
         self.midiButton = tk.Button(self, text="Browse", command=self.browse_for_midi)
         self.midiButton.grid(row=5, column=2)
+
+        tk.Label(self, text="Destination Folder:").grid(row=6)
+        self.destEntry = tk.Entry(self, width=70)
+        self.destEntry.grid(row=6, column=1)
+        self.destButton = tk.Button(self, text="Browse", command=self.browse_for_folder)
+        self.destButton.grid(row=6, column=2)
+
 
     def browse_for_picture(self):
         file_path = filedialog.askopenfilename(title="Choose an image file",
@@ -75,13 +82,21 @@ class Sheet_Reader(tk.Frame):
            self.midiEntry.delete(0, 'end')
            self.midiEntry.insert(0, file_path)
 
+    def browse_for_folder(self):
+        folder_path = filedialog.askdirectory()
+
+        if folder_path:
+            self.destEntry.delete(0, 'end')
+            self.destEntry.insert(0, folder_path)
+
     def generate_sheet(self):
         analysis_component = AnalysisComponent()
         path_to_pic = self.picEntry.get()
-        analysis_component.run(path_to_pic)
+        dest = self.destEntry.get()
+        analysis_component.run(path_to_pic, dest)
 
 root = tk.Tk()
-root.geometry("600x150")
+root.geometry("600x175")
 root.resizable(width=False, height=False)
 rows = 0
 cols = 0

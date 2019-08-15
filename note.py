@@ -3,6 +3,12 @@ from rectangle import Rectangle
 note_step = 0.0625
 
 note_defs = {
+    -10 : ("f6", 89),
+     -9 : ("e6", 88),
+     -8 : ("d6", 86),
+     -7 : ("c6", 84),
+     -6 : ("b5", 83),
+     -5 : ("a5", 81),
      -4 : ("g5", 79),
      -3 : ("f5", 77),
      -2 : ("e5", 76),
@@ -34,7 +40,7 @@ class Note(object):
 
         middle = rec.y + (rec.h / 2.0)
         height = (middle - staff_rec.y) / staff_rec.h
-        note_def = note_defs[int(height/note_step + 0.5)]
+        note_def = note_defs[int(height/note_step -8.5)]
         self.note = note_def[0]
         self.pitch = note_def[1]
         if any(n for n in sharp_notes if n.note[0] == self.note[0]):
