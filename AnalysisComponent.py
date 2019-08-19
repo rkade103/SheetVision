@@ -3,7 +3,9 @@ import subprocess
 import cv2
 import time
 import os
+import queue
 import numpy as np
+from threading import Thread
 from best_fit import fit
 from rectangle import Rectangle
 from note import Note
@@ -11,15 +13,20 @@ from random import randint
 from midiutil.src.midiutil.MidiFile3 import MIDIFile
 from ExcelWriter import ExcelWriter
 
-class AnalysisComponent:
+class AnalysisComponent(Thread):
     """
     The analysis component that scans the sheet music and generates the spacing values as well as note identification and note duration.
     Adapted from the SheetVision Repo's original main.py file.
-
     Main changes include outputting necesary values, as well as converting the code to a class.
     """
 
-    def __init__(self):
+    def __init__(self, pic_path, dest_path, queue):
+        Thread.__init__(self)
+
+        self.img_file = pic_path
+        self.destination_folder = dest_path
+        self.queue = queue
+
         self.staff_files = [
             "resources/template/staff2.png", 
             "resources/template/staff.png"]
@@ -171,6 +178,8 @@ class AnalysisComponent:
         cv2.imwrite(destination_folder+"/b&w_crop.png", rect)
 
     def run(self, img_file, destination_folder):
+
+        self.queue.put("0|Cropping Photos...")   #Progress tracking
         #img_file = sys.argv[1:][0]
         cropped_photo = self.generate_cropped_photo(img_file, destination_folder)
         self.crop_using_non_zero(cropped_photo, destination_folder)
@@ -179,6 +188,8 @@ class AnalysisComponent:
         img = cv2.cvtColor(img_gray,cv2.COLOR_GRAY2RGB)
         ret,img_gray = cv2.threshold(img_gray,127,255,cv2.THRESH_BINARY)
         img_width, img_height = img_gray.shape[::-1]
+
+        self.queue.put("10|Detecting staff locations...")   #Progress tracking
 
         print("Matching staff image...")
         staff_recs = self.locate_images(img_gray, self.staff_imgs, self.staff_lower, self.staff_upper, self.staff_thresh)
@@ -209,6 +220,8 @@ class AnalysisComponent:
         cv2.imwrite(destination_folder+'/staff_boxes_img.png', staff_boxes_img)
         #self.open_file(destination_folder+'/staff_boxes_img.png')
     
+        self.queue.put("30|Detecting sharps...")   #Progress tracking
+
         print("Matching sharp image...")
         sharp_recs = self.locate_images(img_gray, self.sharp_imgs, self.sharp_lower, self.sharp_upper, self.sharp_thresh)
 
@@ -219,6 +232,8 @@ class AnalysisComponent:
             r.draw(sharp_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/sharp_recs_img.png', sharp_recs_img)
         #self.open_file(destination_folder+'/sharp_recs_img.png')
+
+        self.queue.put("40|Detecting flats...")   #Progress tracking
 
         print("Matching flat image...")
         flat_recs = self.locate_images(img_gray, self.flat_imgs, self.flat_lower, self.flat_upper, self.flat_thresh)
@@ -231,6 +246,8 @@ class AnalysisComponent:
         cv2.imwrite(destination_folder+'/flat_recs_img.png', flat_recs_img)
         #self.open_file(destination_folder+'/flat_recs_img.png')
 
+        self.queue.put("50|Detecting quarter notes...")   #Progress tracking
+
         print("Matching quarter image...")
         quarter_recs = self.locate_images(img_gray, self.quarter_imgs, self.quarter_lower, self.quarter_upper, self.quarter_thresh)
 
@@ -241,6 +258,8 @@ class AnalysisComponent:
             r.draw(quarter_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/quarter_recs_img.png', quarter_recs_img)
         #self.open_file(destination_folder+'/quarter_recs_img.png')
+
+        self.queue.put("60|Detecting half notes...")   #Progress tracking
 
         print("Matching half image...")
         half_recs = self.locate_images(img_gray, self.half_imgs, self.half_lower, self.half_upper, self.half_thresh)
@@ -253,6 +272,8 @@ class AnalysisComponent:
         cv2.imwrite(destination_folder+'/half_recs_img.png', half_recs_img)
         #self.open_file(destination_folder+'/half_recs_img.png')
 
+        self.queue.put("70|Detecting whole notes...")   #Progress tracking
+
         print("Matching whole image...")
         whole_recs = self.locate_images(img_gray, self.whole_imgs, self.whole_lower, self.whole_upper, self.whole_thresh)
 
@@ -263,6 +284,8 @@ class AnalysisComponent:
             r.draw(whole_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/whole_recs_img.png', whole_recs_img)
         #self.open_file(destination_folder+'/whole_recs_img.png')
+
+        self.queue.put("80|Analyzing detected musical notation...")   #Progress tracking
 
         note_groups = []
         for box in staff_boxes:
@@ -308,6 +331,8 @@ class AnalysisComponent:
         cv2.imwrite(destination_folder+'/res.png', img)
         #self.open_file(destination_folder+'/res.png')
    
+        self.queue.put("90|Writing the excerpt sheet...")   #Progress tracking
+
         x_values = []
         for note_group in note_groups:
             print([ note.note + " " + note.sym + " " + str((note.rec.x).item()) for note in note_group])
@@ -324,36 +349,39 @@ class AnalysisComponent:
         os.remove(destination_folder+'/whole_recs_img.png')
         #writer.add_worksheet("Values")
         writer.fill_column_with_array("Values", 0, x_values)
-        midi = MIDIFile(1)
+
+        self.queue.put("100|Complete!")   #Progress tracking
+
+        #midi = MIDIFile(1)
      
-        track = 0   
-        time = 0
-        channel = 0
-        volume = 65
+        #track = 0   
+        #time = 0
+        #channel = 0
+        #volume = 65
     
-        midi.addTrackName(track, time, "Track")
-        midi.addTempo(track, time, 140)
+        #midi.addTrackName(track, time, "Track")
+        #midi.addTempo(track, time, 140)
     
-        for note_group in note_groups:
-            duration = None
-            for note in note_group:
-                note_type = note.sym
-                if note_type == "1":
-                    duration = 4
-                elif note_type == "2":
-                    duration = 2
-                elif note_type == "4,8":
-                    duration = 1 if len(note_group) == 1 else 0.5
-                pitch = note.pitch
-                midi.addNote(track,channel,pitch,time,duration,volume)
-                time += duration
+        #for note_group in note_groups:
+        #    duration = None
+        #    for note in note_group:
+        #        note_type = note.sym
+        #        if note_type == "1":
+        #            duration = 4
+        #        elif note_type == "2":
+        #            duration = 2
+        #        elif note_type == "4,8":
+        #            duration = 1 if len(note_group) == 1 else 0.5
+        #        pitch = note.pitch
+        #        midi.addNote(track,channel,pitch,time,duration,volume)
+        #        time += duration
 
-        midi.addNote(track,channel,pitch,time,4,0)
+        #midi.addNote(track,channel,pitch,time,4,0)
 
-        # And write it to disk.
-        print("SAVING FILE TO: "+destination_folder+"/output.mid")
-        binfile = open(destination_folder+"/output.mid", 'wb')
-        midi.writeFile(binfile)
-        binfile.close()
+        ## And write it to disk.
+        #print("SAVING FILE TO: "+destination_folder+"/output.mid")
+        #binfile = open(destination_folder+"/output.mid", 'wb')
+        #midi.writeFile(binfile)
+        #binfile.close()
         #open_file('output.mid')
-        return note_groups
+        return destination_folder+"excerptSheet.xlsx"

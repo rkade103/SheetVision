@@ -1,5 +1,9 @@
 import tkinter as tk
+from tkinter.ttk import *
 import sys
+import queue
+
+from threading import Thread
 
 from tkinter import filedialog
 from AnalysisComponent import AnalysisComponent
@@ -13,6 +17,7 @@ class Sheet_Reader(tk.Frame):
         self.midiEntry = None
         self.open_main_window()
         self.create_window()
+        self.is_done = False
         #self.centreWindow()
 
     def centreWindow(self):
@@ -41,6 +46,7 @@ class Sheet_Reader(tk.Frame):
         self.generateButton.place(x=175, y=140)
 
     def client_exit(self):
+        self.thread.stop()
         sys.exit()
 
     def create_window(self):
@@ -67,6 +73,9 @@ class Sheet_Reader(tk.Frame):
         self.destButton = tk.Button(self, text="Browse", command=self.browse_for_folder)
         self.destButton.grid(row=6, column=2)
 
+        self.progress_bar = Progressbar(self, orient=tk.HORIZONTAL, length=400, mode='determinate')
+
+        self.progress_label = tk.Label(self)
 
     def browse_for_picture(self):
         file_path = filedialog.askopenfilename(title="Choose an image file",
@@ -90,13 +99,53 @@ class Sheet_Reader(tk.Frame):
             self.destEntry.insert(0, folder_path)
 
     def generate_sheet(self):
-        analysis_component = AnalysisComponent()
+        self.generateButton.config(state="disabled")
         path_to_pic = self.picEntry.get()
         dest = self.destEntry.get()
-        analysis_component.run(path_to_pic, dest)
+        self.progress_label.place(x=100, y=175)
+        self.progress_bar.place(x=100, y=200)
+        self.queue = queue.Queue()
+        self.thread = ThreadedTask(self.queue, path_to_pic, dest)
+        self.thread.start()
+        self.master.after(100, self.periodiccall)
+        self.progress_bar.grid_forget()
+
+    def run_analysis_component(self, path_to_pic, dest_path):
+        analysis_component = AnalysisComponent()
+        return analysis_component.run(path_to_pic, dest_path, self.progress_bar)
+        
+    def periodiccall(self):
+        self.process_queue()
+        if self.thread.is_alive():
+            self.after(100, self.periodiccall)
+        else:
+            self.generateButton.config(state="active")
+
+    def process_queue(self):
+        try:
+            msg = self.queue.get_nowait()
+            percentage = int(msg.split("|")[0])
+            message = msg.split("|")[1]
+            self.progress_label['text'] = message
+            self.progress_bar['value'] = percentage
+            if percentage >= 100:
+                return True
+        except queue.Empty:
+            self.master.after(100, self.process_queue)
+
+class ThreadedTask(Thread):
+    def __init__(self, queue, pic_path, destination_folder):
+        Thread.__init__(self)
+        self.queue = queue
+        self.pic_path = pic_path
+        self.destination_folder = destination_folder
+    
+    def run(self):
+        analysis_component = AnalysisComponent(self.pic_path, self.destination_folder, self.queue)
+        analysis_component.run(self.pic_path, self.destination_folder)
 
 root = tk.Tk()
-root.geometry("600x175")
+root.geometry("600x240")
 root.resizable(width=False, height=False)
 rows = 0
 cols = 0
