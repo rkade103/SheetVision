@@ -6,12 +6,14 @@ import os
 import queue
 import numpy as np
 from threading import Thread
+from threading import Event
 from best_fit import fit
 from rectangle import Rectangle
 from note import Note
 from random import randint
 from midiutil.src.midiutil.MidiFile3 import MIDIFile
 from ExcelWriter import ExcelWriter
+from MidiReader import MidiReader
 
 class AnalysisComponent(Thread):
     """
@@ -20,12 +22,13 @@ class AnalysisComponent(Thread):
     Main changes include outputting necesary values, as well as converting the code to a class.
     """
 
-    def __init__(self, pic_path, dest_path, queue):
+    def __init__(self, pic_path, midi_path, dest_path, queue):
         Thread.__init__(self)
 
         self.img_file = pic_path
         self.destination_folder = dest_path
         self.queue = queue
+        self.stop_event = Event()
 
         self.staff_files = [
             "resources/template/staff2.png", 
@@ -64,7 +67,7 @@ class AnalysisComponent(Thread):
         self.whole_lower, self.whole_upper, self.whole_thresh = 50, 150, 0.75
 
     def locate_images(self, img, templates, start, stop, threshold):
-        locations, scale = fit(img, templates, start, stop, threshold)
+        locations, scale = fit(img, templates, start, stop, threshold, self)
         img_locations = []
         for i in range(len(templates)):
             w, h = templates[i].shape[::-1]
@@ -104,29 +107,46 @@ class AnalysisComponent(Thread):
         cv2.imwrite(destination_folder+'/'+name, crop_img)
         return destination_folder+'/'+name
 
+    def stop(self):
+        self.stop_event.set()
+
+    def stopped(self):
+        return self.stop_event.is_set()
+
     def generate_cropped_photo(self, img_file, destination_folder):
-        #img_file = sys.argv[1:][0]
+        if self.stopped():
+            return False
         img = cv2.imread(img_file, 0)
         img_gray = img#cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img = cv2.cvtColor(img_gray,cv2.COLOR_GRAY2RGB)
         ret,img_gray = cv2.threshold(img_gray,127,255,cv2.THRESH_BINARY)
         img_width, img_height = img_gray.shape[::-1]
 
+        if self.stopped():
+            return False
         print("Matching staff image...")
         staff_recs = self.locate_images(img_gray, self.staff_imgs, self.staff_lower, self.staff_upper, self.staff_thresh)
 
+        if self.stopped():
+            return False
         print("Filtering weak staff matches...")
         staff_recs = [j for i in staff_recs for j in i]
         heights = [r.y for r in staff_recs] + [0]
+        if self.stopped():
+            return False
         histo = [heights.count(i) for i in range(0, max(heights) + 1)]
         avg = np.mean(list(set(histo)))
         staff_recs = [r for r in staff_recs if histo[r.y] > avg]
+        if self.stopped():
+            return False
 
         print("Merging staff image results...")
         staff_recs = self.merge_recs(staff_recs, 0.01)
         staff_recs_img = img.copy()
         for r in staff_recs:
             r.draw(staff_recs_img, (0, 0, 255), 2)
+            if self.stopped():
+                return False
         cv2.imwrite(destination_folder+'/staff_recs_img.png', staff_recs_img)
         print(destination_folder+'/staff_recs_img.png')
         self.crop_photo(img, "fully_cropped.png", staff_recs, destination_folder, expand_y=False)
@@ -177,29 +197,37 @@ class AnalysisComponent(Thread):
         cv2.destroyAllWindows()
         cv2.imwrite(destination_folder+"/b&w_crop.png", rect)
 
-    def run(self, img_file, destination_folder):
-
+    def run(self, img_file, midi_file, destination_folder):
+        if self.stopped():
+            return False
         self.queue.put("0|Cropping Photos...")   #Progress tracking
         #img_file = sys.argv[1:][0]
         cropped_photo = self.generate_cropped_photo(img_file, destination_folder)
         self.crop_using_non_zero(cropped_photo, destination_folder)
+        if self.stopped():
+            return False
         img = cv2.imread(cropped_photo, 0)
         img_gray = img#cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img = cv2.cvtColor(img_gray,cv2.COLOR_GRAY2RGB)
         ret,img_gray = cv2.threshold(img_gray,127,255,cv2.THRESH_BINARY)
         img_width, img_height = img_gray.shape[::-1]
-
+        if self.stopped():
+            return False
         self.queue.put("10|Detecting staff locations...")   #Progress tracking
 
         print("Matching staff image...")
         staff_recs = self.locate_images(img_gray, self.staff_imgs, self.staff_lower, self.staff_upper, self.staff_thresh)
-
+        
+        if self.stopped():
+            return False
         print("Filtering weak staff matches...")
         staff_recs = [j for i in staff_recs for j in i]
         heights = [r.y for r in staff_recs] + [0]
         histo = [heights.count(i) for i in range(0, max(heights) + 1)]
         avg = np.mean(list(set(histo)))
         staff_recs = [r for r in staff_recs if histo[r.y] > avg]
+        if self.stopped():
+            return False
 
         print("Merging staff image results...")
         staff_recs = self.merge_recs(staff_recs, 0.01)
@@ -207,10 +235,8 @@ class AnalysisComponent(Thread):
         for r in staff_recs:
             r.draw(staff_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/staff_recs_img.png', staff_recs_img)
-        #self.open_file(destination_folder+'/staff_recs_img.png')
-        #path_to_crop = self.crop_photo(img, staff_recs, destination_folder)
-
-        #img = cv2.imread(path_to_crop, 0)
+        if self.stopped():
+            return False
 
         print("Discovering staff locations...")
         staff_boxes = self.merge_recs([Rectangle(0, r.y, img_width, r.h) for r in staff_recs], 0.01)
@@ -218,17 +244,22 @@ class AnalysisComponent(Thread):
         for r in staff_boxes:
             r.draw(staff_boxes_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/staff_boxes_img.png', staff_boxes_img)
-        #self.open_file(destination_folder+'/staff_boxes_img.png')
+        if self.stopped():
+            return False
     
         self.queue.put("30|Detecting sharps...")   #Progress tracking
 
         print("Matching sharp image...")
         sharp_recs = self.locate_images(img_gray, self.sharp_imgs, self.sharp_lower, self.sharp_upper, self.sharp_thresh)
+        if self.stopped():
+            return False
 
         print("Merging sharp image results...")
         sharp_recs = self.merge_recs([j for i in sharp_recs for j in i], 0.5)
         sharp_recs_img = img.copy()
         for r in sharp_recs:
+            if self.stopped():
+                return False
             r.draw(sharp_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/sharp_recs_img.png', sharp_recs_img)
         #self.open_file(destination_folder+'/sharp_recs_img.png')
@@ -237,11 +268,15 @@ class AnalysisComponent(Thread):
 
         print("Matching flat image...")
         flat_recs = self.locate_images(img_gray, self.flat_imgs, self.flat_lower, self.flat_upper, self.flat_thresh)
+        if self.stopped():
+            return False
 
         print("Merging flat image results...")
         flat_recs = self.merge_recs([j for i in flat_recs for j in i], 0.5)
         flat_recs_img = img.copy()
         for r in flat_recs:
+            if self.stopped():
+                return False
             r.draw(flat_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/flat_recs_img.png', flat_recs_img)
         #self.open_file(destination_folder+'/flat_recs_img.png')
@@ -250,11 +285,15 @@ class AnalysisComponent(Thread):
 
         print("Matching quarter image...")
         quarter_recs = self.locate_images(img_gray, self.quarter_imgs, self.quarter_lower, self.quarter_upper, self.quarter_thresh)
+        if self.stopped():
+            return False
 
         print("Merging quarter image results...")
         quarter_recs = self.merge_recs([j for i in quarter_recs for j in i], 0.5)
         quarter_recs_img = img.copy()
         for r in quarter_recs:
+            if self.stopped():
+                return False
             r.draw(quarter_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/quarter_recs_img.png', quarter_recs_img)
         #self.open_file(destination_folder+'/quarter_recs_img.png')
@@ -263,11 +302,15 @@ class AnalysisComponent(Thread):
 
         print("Matching half image...")
         half_recs = self.locate_images(img_gray, self.half_imgs, self.half_lower, self.half_upper, self.half_thresh)
+        if self.stopped():
+            return False
 
         print("Merging half image results...")
         half_recs = self.merge_recs([j for i in half_recs for j in i], 0.5)
         half_recs_img = img.copy()
         for r in half_recs:
+            if self.stopped():
+                return False
             r.draw(half_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/half_recs_img.png', half_recs_img)
         #self.open_file(destination_folder+'/half_recs_img.png')
@@ -276,11 +319,15 @@ class AnalysisComponent(Thread):
 
         print("Matching whole image...")
         whole_recs = self.locate_images(img_gray, self.whole_imgs, self.whole_lower, self.whole_upper, self.whole_thresh)
+        if self.stopped():
+            return False
 
         print("Merging whole image results...")
         whole_recs = self.merge_recs([j for i in whole_recs for j in i], 0.5)
         whole_recs_img = img.copy()
         for r in whole_recs:
+            if self.stopped():
+                return False
             r.draw(whole_recs_img, (0, 0, 255), 2)
         cv2.imwrite(destination_folder+'/whole_recs_img.png', whole_recs_img)
         #self.open_file(destination_folder+'/whole_recs_img.png')
@@ -289,6 +336,8 @@ class AnalysisComponent(Thread):
 
         note_groups = []
         for box in staff_boxes:
+            if self.stopped():
+                return False
             staff_sharps = [Note(r, "sharp", box) 
                 for r in sharp_recs if abs(r.middle[1] - box.middle[1]) < box.h*5.0/8.0]
             staff_flats = [Note(r, "flat", box) 
@@ -307,6 +356,8 @@ class AnalysisComponent(Thread):
             note_group = []
             i = 0; j = 0;
             while(i < len(staff_notes)):
+                if self.stopped():
+                    return False
                 if (j < len(staffs) and i < len(staff_notes) and staff_notes[i].rec.x > staffs[j].x):
                     r = staffs[j]
                     j += 1;
@@ -338,8 +389,11 @@ class AnalysisComponent(Thread):
             print([ note.note + " " + note.sym + " " + str((note.rec.x).item()) for note in note_group])
             [x_values.append(int((note.rec.x).item())) for note in note_group]
 
-        writer = ExcelWriter(destination_folder)
+        midi_reader = MidiReader(midi_file)
+        list_of_notes = midi_reader.get_list_of_notes()
+        writer = ExcelWriter(destination_folder, midi_file)
         writer.write_excerpt_sheet(note_groups)
+
         os.remove(destination_folder+'/staff_recs_img.png')
         os.remove(destination_folder+'/staff_boxes_img.png')
         os.remove(destination_folder+'/sharp_recs_img.png')
@@ -347,8 +401,11 @@ class AnalysisComponent(Thread):
         os.remove(destination_folder+'/quarter_recs_img.png')
         os.remove(destination_folder+'/half_recs_img.png')
         os.remove(destination_folder+'/whole_recs_img.png')
+
         #writer.add_worksheet("Values")
         writer.fill_column_with_array("Values", 0, x_values)
+        if self.stopped():
+            return False
 
         self.queue.put("100|Complete!")   #Progress tracking
 
@@ -384,4 +441,4 @@ class AnalysisComponent(Thread):
         #midi.writeFile(binfile)
         #binfile.close()
         #open_file('output.mid')
-        return destination_folder+"excerptSheet.xlsx"
+        return True     #Used to stop the thread.

@@ -4,6 +4,7 @@ import sys
 import queue
 
 from threading import Thread
+from threading import Event
 
 from tkinter import filedialog
 from AnalysisComponent import AnalysisComponent
@@ -19,6 +20,7 @@ class Sheet_Reader(tk.Frame):
         self.create_window()
         self.is_done = False
         #self.centreWindow()
+        self.thread = None
 
     def centreWindow(self):
         w = 500
@@ -46,7 +48,9 @@ class Sheet_Reader(tk.Frame):
         self.generateButton.place(x=175, y=140)
 
     def client_exit(self):
-        self.thread.stop()
+        if self.thread:
+            self.thread.stop()
+            #self.thread.join()
         sys.exit()
 
     def create_window(self):
@@ -85,7 +89,7 @@ class Sheet_Reader(tk.Frame):
             self.picEntry.insert(0, file_path)
 
     def browse_for_midi(self):
-       file_path = filedialog.askopenfilename(title="Choose an image file",
+       file_path = filedialog.askopenfilename(title="Choose a midi file",
                                                filetypes=[('midi files', (".MID",".MIDI", ".mid", "midi"))])
        if file_path:
            self.midiEntry.delete(0, 'end')
@@ -101,18 +105,19 @@ class Sheet_Reader(tk.Frame):
     def generate_sheet(self):
         self.generateButton.config(state="disabled")
         path_to_pic = self.picEntry.get()
+        path_to_midi = self.midiEntry.get()
         dest = self.destEntry.get()
         self.progress_label.place(x=100, y=175)
         self.progress_bar.place(x=100, y=200)
         self.queue = queue.Queue()
-        self.thread = ThreadedTask(self.queue, path_to_pic, dest)
+        self.thread = ThreadedTask(self.queue, path_to_pic, path_to_midi, dest)
         self.thread.start()
         self.master.after(100, self.periodiccall)
         self.progress_bar.grid_forget()
 
-    def run_analysis_component(self, path_to_pic, dest_path):
+    def run_analysis_component(self, path_to_pic, path_to_midi, dest_path):
         analysis_component = AnalysisComponent()
-        return analysis_component.run(path_to_pic, dest_path, self.progress_bar)
+        return analysis_component.run(path_to_pic, path_to_midi, dest_path, self.progress_bar)
         
     def periodiccall(self):
         self.process_queue()
@@ -134,15 +139,19 @@ class Sheet_Reader(tk.Frame):
             self.master.after(100, self.process_queue)
 
 class ThreadedTask(Thread):
-    def __init__(self, queue, pic_path, destination_folder):
+    def __init__(self, queue, pic_path, midi_path, destination_folder):
         Thread.__init__(self)
         self.queue = queue
         self.pic_path = pic_path
+        self.midi_path = midi_path
         self.destination_folder = destination_folder
-    
+        self.analysis_component = AnalysisComponent(self.pic_path, self.midi_path, self.destination_folder, self.queue)
+            
     def run(self):
-        analysis_component = AnalysisComponent(self.pic_path, self.destination_folder, self.queue)
-        analysis_component.run(self.pic_path, self.destination_folder)
+        self.analysis_component.run(self.pic_path, self.midi_path, self.destination_folder)
+
+    def stop(self):
+        self.analysis_component.stop()
 
 root = tk.Tk()
 root.geometry("600x240")

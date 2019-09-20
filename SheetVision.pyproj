@@ -31,6 +31,9 @@
     <Compile Include="MIDIUtil-0.89\MIDIUtil-0.89\src\midiutil\MidiFile3.py" />
     <Compile Include="MIDIUtil-0.89\MIDIUtil-0.89\src\midiutil\__init__.py" />
     <Compile Include="MIDIUtil-0.89\MIDIUtil-0.89\src\unittests\miditest.py" />
+    <Compile Include="MidiReader.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="note.py" />
     <Compile Include="rectangle.py" />
     <Compile Include="Sheet_Reader.py" />

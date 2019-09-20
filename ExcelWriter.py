@@ -1,13 +1,18 @@
 import xlsxwriter
 import math
+import subprocess
+import csv
+import json
 
 class ExcelWriter(object):
     """Object that contains all excel file writing capabalities."""
 
-    def __init__(self, filePath):
-        self.filePath = filePath
-        self.workbook = xlsxwriter.Workbook(filePath+"/excerptSheet.xlsx")
-        self.testing_workbook = xlsxwriter.Workbook(filePath+"/testing.xlsx")
+    def __init__(self, dest_path, midi_path):
+        self.filePath = dest_path
+        self.midi_path = midi_path
+        self.workbook = xlsxwriter.Workbook(dest_path+"/excerptSheet.xlsx")
+        self.testing_workbook = xlsxwriter.Workbook(dest_path+"/testing.xlsx")
+        self.raw_workbook_path = self.convert_midi_to_csv(midi_path, dest_path)
         self.COLUMN_HEADERS = ["Line number", "Note", "Note Number", "Duration", "Include? (Y/N)",
                               "Include TL", "Include Dyn.", "Include Art.", "Include N.D.", 
                               "Space for barline", "Graph Width", "Vel. Graph Width", "X-axis limit", "Image Width"]
@@ -25,6 +30,11 @@ class ExcelWriter(object):
         self.VEL_GRAPH_COL = 11
         self.X_LIMIT_COL = 12
         self.IMG_WIDTH_COL = 13
+        self.load_config_file("notes.json")
+
+    def load_config_file(self, path):
+        with open(path) as f:
+            self.letter_notes = json.load(f)
     
     def add_worksheet(self, sheet_name):
         self.workbook.add_worksheet(name=sheet_name)
@@ -43,6 +53,7 @@ class ExcelWriter(object):
 
     def write_excerpt_sheet(self, note_groups):
         worksheet = self.workbook.add_worksheet("Excerpt sheet")
+        list_of_notes = self.get_list_of_midi_notes(self.raw_workbook_path)
         #worksheet = self.workbook.get_worksheet_by_name("Excerpt Sheet")
         self.write_headers(worksheet)
         row = 1 #skip the header.
@@ -51,7 +62,8 @@ class ExcelWriter(object):
         for note_group in note_groups:
             for note in note_group:
                 worksheet.write(row, self.LINE_NUMBER_COL, row)    #Write the line number.
-                worksheet.write(row, self.NOTE_COL, note.note.upper())
+                if(row <= len(list_of_notes)):
+                    worksheet.write(row, self.NOTE_COL, list_of_notes[row-1])
                 worksheet.write(row, self.DURATION_COL, self.get_duration_of_note(note_group, note))
                 worksheet.write(row, self.INCLUDE_1, "Y")
                 worksheet.write(row, self.INCLUDE_2, "Y")
@@ -107,6 +119,29 @@ class ExcelWriter(object):
         '''
         y = round((0.020106*x_value - 1.34251), 2)
         return y
+
+    def convert_midi_to_csv(self, midi_path, dest_path):
+        split_name = midi_path.split("/")
+        print(split_name)
+        file_name = split_name[-1].split(".")[0]
+        print(file_name)
+        file_name = dest_path + "/" + file_name + ".csv"
+        command = ["Midicsv", midi_path, file_name]
+        subprocess.run(command)
+        return file_name
+
+    def get_list_of_midi_notes(self, path):
+        list_of_notes = []
+        with open(path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=",")
+            line_count = 0
+            for row in csv_reader:
+                if row[2].lower().strip() == "note_on_c" and int(row[5]) != 0:
+                    list_of_notes.append(self.convert_midi_to_letter(row[4].strip()))
+        return list_of_notes
+
+    def convert_midi_to_letter(self, note):
+        return self.letter_notes[str(note)]
 
     def run(self):
         raise NotImplementedError("The run method has not been implemented yet.")
