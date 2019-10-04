@@ -109,6 +109,7 @@ class AnalysisComponent(Thread):
 
     def stop(self):
         self.stop_event.set()
+        raise SystemExit;
 
     def stopped(self):
         return self.stop_event.is_set()
@@ -149,7 +150,7 @@ class AnalysisComponent(Thread):
                 return False
         cv2.imwrite(destination_folder+'/staff_recs_img.png', staff_recs_img)
         print(destination_folder+'/staff_recs_img.png')
-        self.crop_photo(img, "fully_cropped.png", staff_recs, destination_folder, expand_y=False)
+        #self.crop_photo(img, "fully_cropped.png", staff_recs, destination_folder, expand_y=False)
         path = self.crop_photo(img, "padded_y.png", staff_recs, destination_folder, expand_y=True)
         cv2.destroyAllWindows()
         return path
@@ -401,44 +402,13 @@ class AnalysisComponent(Thread):
         os.remove(destination_folder+'/quarter_recs_img.png')
         os.remove(destination_folder+'/half_recs_img.png')
         os.remove(destination_folder+'/whole_recs_img.png')
+        os.remove(destination_folder+'/res.png')
+        os.remove(destination_folder+'/padded_y.png')
+
 
         #writer.add_worksheet("Values")
-        writer.fill_column_with_array("Values", 0, x_values)
         if self.stopped():
             return False
 
         self.queue.put("100|Complete!")   #Progress tracking
-
-        #midi = MIDIFile(1)
-     
-        #track = 0   
-        #time = 0
-        #channel = 0
-        #volume = 65
-    
-        #midi.addTrackName(track, time, "Track")
-        #midi.addTempo(track, time, 140)
-    
-        #for note_group in note_groups:
-        #    duration = None
-        #    for note in note_group:
-        #        note_type = note.sym
-        #        if note_type == "1":
-        #            duration = 4
-        #        elif note_type == "2":
-        #            duration = 2
-        #        elif note_type == "4,8":
-        #            duration = 1 if len(note_group) == 1 else 0.5
-        #        pitch = note.pitch
-        #        midi.addNote(track,channel,pitch,time,duration,volume)
-        #        time += duration
-
-        #midi.addNote(track,channel,pitch,time,4,0)
-
-        ## And write it to disk.
-        #print("SAVING FILE TO: "+destination_folder+"/output.mid")
-        #binfile = open(destination_folder+"/output.mid", 'wb')
-        #midi.writeFile(binfile)
-        #binfile.close()
-        #open_file('output.mid')
         return True     #Used to stop the thread.

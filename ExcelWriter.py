@@ -3,15 +3,18 @@ import math
 import subprocess
 import csv
 import json
+import os
+import tkinter as tk
+import xlrd
+from tkinter import messagebox
 
 class ExcelWriter(object):
     """Object that contains all excel file writing capabalities."""
 
     def __init__(self, dest_path, midi_path):
-        self.filePath = dest_path
+        self.filePath = dest_path+"/excerptSheet.xlsx"
         self.midi_path = midi_path
         self.workbook = xlsxwriter.Workbook(dest_path+"/excerptSheet.xlsx")
-        self.testing_workbook = xlsxwriter.Workbook(dest_path+"/testing.xlsx")
         self.raw_workbook_path = self.convert_midi_to_csv(midi_path, dest_path)
         self.COLUMN_HEADERS = ["Line number", "Note", "Note Number", "Duration", "Include? (Y/N)",
                               "Include TL", "Include Dyn.", "Include Art.", "Include N.D.", 
@@ -30,6 +33,7 @@ class ExcelWriter(object):
         self.VEL_GRAPH_COL = 11
         self.X_LIMIT_COL = 12
         self.IMG_WIDTH_COL = 13
+        self.MSG_COL = 14
         self.load_config_file("notes.json")
 
     def load_config_file(self, path):
@@ -40,6 +44,7 @@ class ExcelWriter(object):
         self.workbook.add_worksheet(name=sheet_name)
 
     def fill_column_with_array(self, sheet_name, col, array):
+        self.testing_workbook = xlsxwriter.Workbook(dest_path+"/testing.xlsx")
         worksheet = self.testing_workbook.add_worksheet(sheet_name)
         row = 0
         worksheet.write(row, col, "Python Values")
@@ -50,6 +55,16 @@ class ExcelWriter(object):
             worksheet.write(row, col+1, self.spacing_function(item))
             row +=1
         self.testing_workbook.close()
+
+    def check_for_ties_and_slurs(self):
+        worksheet = xlrd.open_workbook(self.filePath).sheet_by_index(0)
+        for row in range(1, worksheet.nrows):
+            #print("LINE NUMBER: " + str(worksheet.cell_value(row, 0)) +"\nNOTE: " + str(worksheet.cell_value(row, 1)))
+            if(worksheet.cell_value(row, 0) == "END"):
+                return False # No slurs or ties detected.
+            if(worksheet.cell_value(row, 1) == None or worksheet.cell_value(row, 1) == ""):
+                return True #Slur or tie detected in the playthrough.
+        return False # No slurs or ties detected.
 
     def write_excerpt_sheet(self, note_groups):
         worksheet = self.workbook.add_worksheet("Excerpt sheet")
@@ -83,7 +98,13 @@ class ExcelWriter(object):
         worksheet.write(1, self.GRAPH_WIDTH_COL, graph_width)
         worksheet.write(1, self.VEL_GRAPH_COL, vel_graph_width)
         worksheet.write(1, self.X_LIMIT_COL, math.ceil(last_graph_value) + 1)
+        if(list_of_notes.count != self.count_notes_in_note_groups(note_groups)):
+            worksheet.write(row+2, self.MSG_COL, "The number of notes detected in the sheet and the number\n" + 
+                                                "of notes in the model file do not match. Are there any\n" + 
+                                                "slurs or ties in the excerpt? If so, make sure to remove\n" +
+                                                "the notes that should not be played from the excerptSheet\n")
         self.workbook.close()
+        self.delete_file(self.raw_workbook_path)
 
     def get_duration_of_note(self, note_group, note):
         duration = None
@@ -119,6 +140,13 @@ class ExcelWriter(object):
         '''
         y = round((0.020106*x_value - 1.34251), 2)
         return y
+    
+    def count_notes_in_note_groups(self, note_groups):
+        counter = 0
+        for note_group in note_groups:
+            for note in note_group:
+                counter += 1
+        return counter
 
     def convert_midi_to_csv(self, midi_path, dest_path):
         split_name = midi_path.split("/")
@@ -142,6 +170,9 @@ class ExcelWriter(object):
 
     def convert_midi_to_letter(self, note):
         return self.letter_notes[str(note)]
+
+    def delete_file(self, path):
+        os.remove(path)
 
     def run(self):
         raise NotImplementedError("The run method has not been implemented yet.")
