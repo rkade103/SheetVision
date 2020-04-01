@@ -1,5 +1,4 @@
 import cv2
-#import matplotlib.pyplot as plt
 import numpy as np
 
 def fit(img, templates, start_percent, stop_percent, threshold, analysis_component):
@@ -7,9 +6,6 @@ def fit(img, templates, start_percent, stop_percent, threshold, analysis_compone
     best_location_count = -1
     best_locations = []
     best_scale = 1
-
-    #plt.axis([0, 2, 0, 1])
-    #plt.show(block=False)
 
     x = []
     y = []
@@ -32,17 +28,13 @@ def fit(img, templates, start_percent, stop_percent, threshold, analysis_compone
         print("scale: {0}, hits: {1}".format(scale, location_count))
         x.append(location_count)
         y.append(scale)
-        #plt.plot(y, x)
-        #plt.pause(0.00001)
         if analysis_component.stopped():
             return;
         if (location_count > best_location_count):
             best_location_count = location_count
             best_locations = locations
             best_scale = scale
-            #plt.axis([0, 2, 0, best_location_count])
         elif (location_count < best_location_count):
             pass
-    #plt.close()
 
     return best_locations, best_scale

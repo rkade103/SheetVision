@@ -22,6 +22,9 @@
   <ItemGroup>
     <Compile Include="best_fit.py" />
     <Compile Include="AnalysisComponent.py" />
+    <Compile Include="ErrorDetection.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="ExcelWriter.py">
       <SubType>Code</SubType>
     </Compile>
@@ -39,6 +42,9 @@
     <Compile Include="Sheet_Reader.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="main.spec">
+      <SubType>Code</SubType>
+    </Content>
     <Content Include="MIDIUtil-0.89\MIDIUtil-0.89\documentation\ClassReference.txt" />
     <Content Include="MIDIUtil-0.89\MIDIUtil-0.89\documentation\Extending.txt" />
     <Content Include="MIDIUtil-0.89\MIDIUtil-0.89\License.txt" />

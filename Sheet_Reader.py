@@ -11,8 +11,10 @@ from tkinter import filedialog
 from tkinter import messagebox
 from AnalysisComponent import AnalysisComponent
 from ExcelWriter import ExcelWriter
+import ErrorDetection
 
 import traceback
+from PIL import Image
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
@@ -63,7 +65,6 @@ class Sheet_Reader(tk.Frame):
     def client_exit(self):
         if self.thread:
             self.thread.stop()
-            #self.thread.join()
         sys.exit()
 
     def create_window(self):
@@ -139,8 +140,6 @@ class Sheet_Reader(tk.Frame):
         self.queue = queue.Queue()
         self.thread = ThreadedTask(self.queue, path_to_pic, path_to_midi, dest)
         self.thread.start()
-        #self.stacktraces();
-        #print("###########################################################################################################")
         self.master.after(100, self.periodiccall)
         self.progress_bar.grid_forget()
 
@@ -151,6 +150,15 @@ class Sheet_Reader(tk.Frame):
             return False
         if not os.path.exists(path_to_pic):
             messagebox.showwarning("Invalid picture path", "The path given for the picture file is invalid. Please enter a different path.")
+            return False
+        im = Image.open(path_to_pic)
+        width, height = im.size
+        if width <= 59 or height <= 170:
+            messagebox.showwarning("Invalid picture size", "The picture given is too small for analysis. Make sure the width is over 59 pixels, and the height is over 170 pixels.")
+            return False
+        message = ErrorDetection.check_if_only_white(path_to_pic)
+        if message != None:
+            messagebox.showwarning("Invalid Picture", message)
             return False
         return True
 
@@ -186,7 +194,7 @@ class Sheet_Reader(tk.Frame):
                                                             "Please close the file or select a different destination folder.")
                 return False
         return True #If the file doesn't exist, there's no way it could be open.
-
+    
     def check_for_slurs_and_ties(self):
         excerpt_sheet_path = self.destEntry.get()+"/excerptSheet.xlsx"
         writer = ExcelWriter(self.destEntry.get(), self.midiEntry.get())
@@ -215,12 +223,15 @@ class Sheet_Reader(tk.Frame):
     def process_queue(self):
         try:
             msg = self.queue.get_nowait()
-            percentage = int(msg.split("|")[0])
-            message = msg.split("|")[1]
-            self.progress_label['text'] = message
-            self.progress_bar['value'] = percentage
-            if percentage >= 100:
-                return True
+            if(msg.split("|")[0] == "ERROR"):
+                return False;
+            else:
+                percentage = int(msg.split("|")[0])
+                message = msg.split("|")[1]
+                self.progress_label['text'] = message
+                self.progress_bar['value'] = percentage
+                if percentage >= 100:
+                    return True
         except queue.Empty:
             self.master.after(100, self.process_queue)
 
@@ -251,7 +262,6 @@ class ThreadedTask(Thread):
         
     def run(self):
         self.analysis_component.run(self.pic_path, self.midi_path, self.destination_folder)
-        self.analysis_component = None
 
     def stop(self):
         self.analysis_component.stop()
@@ -271,7 +281,7 @@ while (cols < 3):
     cols += 1
 app = Sheet_Reader(root)
 app.pack_propagate(0)
+root.tk.call('wm', 'iconphoto', root._w, tk.PhotoImage(file=r'piano lab icon.gif'))
 root.mainloop()
-#interface = UI_SR()
-#interface.open_main_window()
+input("Press any key to continue...")
 

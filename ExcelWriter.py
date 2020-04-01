@@ -7,34 +7,33 @@ import os
 import tkinter as tk
 import xlrd
 from tkinter import messagebox
+from time import sleep
 
 class ExcelWriter(object):
     """Object that contains all excel file writing capabalities."""
 
     def __init__(self, dest_path, midi_path):
         self.filePath = dest_path+"/excerptSheet.xlsx"
+        self.dest_path = dest_path
         self.midi_path = midi_path
         self.workbook = xlsxwriter.Workbook(dest_path+"/excerptSheet.xlsx")
-        self.raw_workbook_path = self.convert_midi_to_csv(midi_path, dest_path)
-        self.COLUMN_HEADERS = ["Line number", "Note", "Note Number", "Duration", "Include? (Y/N)",
+        self.COLUMN_HEADERS = ["Line number", "Note", "Duration", "Include? (Y/N)",
                               "Include TL", "Include Dyn.", "Include Art.", "Include N.D.", 
-                              "Space for barline", "Graph Width", "Vel. Graph Width", "X-axis limit", "Image Width"]
+                              "Space for barline", "Graph Width", "Vel. Graph Width", "X-axis limit"]
         self.LINE_NUMBER_COL = 0
         self.NOTE_COL = 1
-        self.NOTE_NUMBER_COL = 2
-        self.DURATION_COL = 3
-        self.INCLUDE_1 = 4
-        self.INCLUDE_2 = 5
-        self.INCLUDE_3 = 6
-        self.INCLUDE_4 = 7
-        self.INCLUDE_5 = 8
-        self.SPACE_FOR_BARLINE = 9
-        self.GRAPH_WIDTH_COL = 10
-        self.VEL_GRAPH_COL = 11
-        self.X_LIMIT_COL = 12
-        self.IMG_WIDTH_COL = 13
+        self.DURATION_COL = 2
+        self.INCLUDE_1 = 3
+        self.INCLUDE_2 = 4
+        self.INCLUDE_3 = 5
+        self.INCLUDE_4 = 6
+        self.INCLUDE_5 = 7
+        self.SPACE_FOR_BARLINE = 8
+        self.GRAPH_WIDTH_COL = 9
+        self.VEL_GRAPH_COL = 10
+        self.X_LIMIT_COL = 11
         self.MSG_COL = 14
-        self.load_config_file("notes.json")
+        self.load_config_file("resources/notes.json")
 
     def load_config_file(self, path):
         with open(path) as f:
@@ -67,6 +66,7 @@ class ExcelWriter(object):
         return False # No slurs or ties detected.
 
     def write_excerpt_sheet(self, note_groups):
+        self.raw_workbook_path = self.convert_midi_to_csv(self.midi_path, self.dest_path)
         worksheet = self.workbook.add_worksheet("Excerpt sheet")
         list_of_notes = self.get_list_of_midi_notes(self.raw_workbook_path)
         #worksheet = self.workbook.get_worksheet_by_name("Excerpt Sheet")
@@ -98,13 +98,14 @@ class ExcelWriter(object):
         worksheet.write(1, self.GRAPH_WIDTH_COL, graph_width)
         worksheet.write(1, self.VEL_GRAPH_COL, vel_graph_width)
         worksheet.write(1, self.X_LIMIT_COL, math.ceil(last_graph_value) + 1)
-        if(list_of_notes.count != self.count_notes_in_note_groups(note_groups)):
-            worksheet.write(row+2, self.MSG_COL, "The number of notes detected in the sheet and the number\n" + 
-                                                "of notes in the model file do not match. Are there any\n" + 
-                                                "slurs or ties in the excerpt? If so, make sure to remove\n" +
-                                                "the notes that should not be played from the excerptSheet\n")
+        #if(list_of_notes.count != self.count_notes_in_note_groups(note_groups)):
+        #    worksheet.write(row+2, self.MSG_COL, "The number of notes detected in the sheet and the number\n" + 
+        #                                        "of notes in the model file do not match. Are there any\n" + 
+        #                                        "slurs or ties in the excerpt? If so, make sure to remove\n" +
+        #                                        "the notes that should not be played from the excerptSheet\n")
         self.workbook.close()
         self.delete_file(self.raw_workbook_path)
+        return self.raw_workbook_path
 
     def get_duration_of_note(self, note_group, note):
         duration = None
@@ -150,12 +151,12 @@ class ExcelWriter(object):
 
     def convert_midi_to_csv(self, midi_path, dest_path):
         split_name = midi_path.split("/")
-        print(split_name)
         file_name = split_name[-1].split(".")[0]
-        print(file_name)
         file_name = dest_path + "/" + file_name + ".csv"
-        command = ["Midicsv", midi_path, file_name]
-        subprocess.run(command)
+        self.delete_path = dest_path + "//" + file_name + ".csv"
+        command = ["Midicsv", midi_path, file_name, "EXIT /B"]
+        p = subprocess.Popen(command)
+        p.wait()
         return file_name
 
     def get_list_of_midi_notes(self, path):
@@ -172,7 +173,10 @@ class ExcelWriter(object):
         return self.letter_notes[str(note)]
 
     def delete_file(self, path):
-        os.remove(path)
+        try:
+            os.remove(path)
+        except Exception as e:
+            print(e.strerror)
 
     def run(self):
         raise NotImplementedError("The run method has not been implemented yet.")

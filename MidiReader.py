@@ -1,4 +1,3 @@
-import music21
 import json
 from mido import MidiFile
 
@@ -6,18 +5,14 @@ class MidiReader(object):
 
     def __init__(self, path):
         self.path = path
-        self.m21Obj = music21.converter.parse(path)
         self.midoObj = MidiFile(path)
-        self.load_config_file("notes.json")
+        self.load_config_file("resources/notes.json")
 
     def load_config_file(self, path):
         with open(path) as f:
             self.letter_notes = json.load(f)
 
     def get_list_of_notes(self):
-        #lst_of_notes = []
-        #self.m21Obj.show('text')
-        #self.m21Obj.show()
         list_of_notes = []
         for track in self.midoObj.tracks:
             for msg in track:

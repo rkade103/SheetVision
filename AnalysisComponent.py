@@ -33,28 +33,49 @@ class AnalysisComponent(Thread):
         self.staff_files = [
             "resources/template/staff2.png", 
             "resources/template/staff.png"]
+        #self.staff_files = [
+        #    self.resource_path("resources/template/staff2.png"),
+        #    self.resource_path("resources/template/staff.png")]
         self.quarter_files = [
             "resources/template/quarter.png", 
             "resources/template/solid-note.png"]
+        #self.quarter_files = [
+        #    self.resource_path("resources/template/quarter.png"),
+        #    self.resource_path("resources/template/solid-note.png")]
         self.sharp_files = [
             "resources/template/sharp.png"]
+        #self.sharp_files = [
+        #    self.resource_path("resources/template/sharp.png")]
         self.flat_files = [
             "resources/template/flat-line.png", 
             "resources/template/flat-space.png" ]
+        #self.flat_files = [
+        #    self.resource_path("resources/template/flat-line.png"),
+        #    self.resource_path("resources/template/flat-space.png")]
         self.half_files = [
             "resources/template/half-space.png", 
             "resources/template/half-note-line.png",
             "resources/template/half-line.png", 
             "resources/template/half-note-space.png"]
+        #self.half_files = [
+        #    self.resource_path("resources/template/half-space.png"),
+        #    self.resource_path("resources/template/half-note-line.png"),
+        #    self.resource_path("resources/template/half-line.png"),
+        #    self.resource_path("resources/template/half-note-space.png")]
         self.whole_files = [
             "resources/template/whole-space.png", 
             "resources/template/whole-note-line.png",
             "resources/template/whole-line.png", 
             "resources/template/whole-note-space.png"]
+        #self.whole_files = [
+        #    self.resource_path("resources/template/whole-space.png"),
+        #    self.resource_path("resources/template/whole-note-line.png"),
+        #    self.resource_path("resources/template/whole-line.png"),
+        #    self.resource_path("resources/template/whole-note-space.png")]
 
         self.staff_imgs = [cv2.imread(staff_file, 0) for staff_file in self.staff_files]
         self.quarter_imgs = [cv2.imread(quarter_file, 0) for quarter_file in self.quarter_files]
-        self.sharp_imgs = [cv2.imread(sharp_file, 0) for sharp_file in self.sharp_files] #Error here? Removed the s
+        self.sharp_imgs = [cv2.imread(sharp_file, 0) for sharp_file in self.sharp_files] 
         self.flat_imgs = [cv2.imread(flat_file, 0) for flat_file in self.flat_files]
         self.half_imgs = [cv2.imread(half_file, 0) for half_file in self.half_files]
         self.whole_imgs = [cv2.imread(whole_file, 0) for whole_file in self.whole_files]
@@ -65,6 +86,14 @@ class AnalysisComponent(Thread):
         self.quarter_lower, self.quarter_upper, self.quarter_thresh = 50, 150, 0.7
         self.half_lower, self.half_upper, self.half_thresh = 50, 150, 0.65
         self.whole_lower, self.whole_upper, self.whole_thresh = 50, 150, 0.75
+
+    def resource_path(self, relative_path):
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)
 
     def locate_images(self, img, templates, start, stop, threshold):
         locations, scale = fit(img, templates, start, stop, threshold, self)
@@ -102,7 +131,9 @@ class AnalysisComponent(Thread):
 
     def crop_photo(self, img, name, staff_recs_boxes, destination_folder, expand_y=False):
         first_x, second_x, first_y, second_y = self.get_borders(staff_recs_boxes, expand_y)
-        print("FIRST_X: "+str(first_x) +"; SECOND_X: "+ str(second_x)+"; FIRST_Y: " + str(first_y) + "; SECOND_Y: "+ str(second_y))
+        if(first_x == 0 and second_x == 0 and first_y == 0 and second_y == 0):
+            return;
+        #print("FIRST_X: "+str(first_x) +"; SECOND_X: "+ str(second_x)+"; FIRST_Y: " + str(first_y) + "; SECOND_Y: "+ str(second_y))
         crop_img = img[first_y:second_y, first_x:second_x]
         cv2.imwrite(destination_folder+'/'+name, crop_img)
         return destination_folder+'/'+name
@@ -149,18 +180,21 @@ class AnalysisComponent(Thread):
             if self.stopped():
                 return False
         cv2.imwrite(destination_folder+'/staff_recs_img.png', staff_recs_img)
-        print(destination_folder+'/staff_recs_img.png')
+        #print(destination_folder+'/staff_recs_img.png')
         #self.crop_photo(img, "fully_cropped.png", staff_recs, destination_folder, expand_y=False)
         path = self.crop_photo(img, "padded_y.png", staff_recs, destination_folder, expand_y=True)
         cv2.destroyAllWindows()
         return path
     
     def get_borders(self, array, expand_y=False):
-        max_x_value = array[0].x
-        min_x_value = array[0].x
-        max_y_value = array[0].y
-        min_y_value = array[0].y
-        
+        try:
+            max_x_value = array[0].x
+            min_x_value = array[0].x
+            max_y_value = array[0].y
+            min_y_value = array[0].y
+        except Exception as e:
+            self.queue.put("ERROR|Error: No staffs could be detected in the image.")
+            return (0, 0, 0, 0)
         for i in array:
             if((i.x + i.w) > max_x_value):
                 max_x_value = i.x + i.w
@@ -387,13 +421,13 @@ class AnalysisComponent(Thread):
 
         x_values = []
         for note_group in note_groups:
-            print([ note.note + " " + note.sym + " " + str((note.rec.x).item()) for note in note_group])
+            #print([ note.note + " " + note.sym + " " + str((note.rec.x).item()) for note in note_group])
             [x_values.append(int((note.rec.x).item())) for note in note_group]
 
         midi_reader = MidiReader(midi_file)
         list_of_notes = midi_reader.get_list_of_notes()
         writer = ExcelWriter(destination_folder, midi_file)
-        writer.write_excerpt_sheet(note_groups)
+        csv_file_name = writer.write_excerpt_sheet(note_groups)
 
         os.remove(destination_folder+'/staff_recs_img.png')
         os.remove(destination_folder+'/staff_boxes_img.png')
@@ -406,6 +440,7 @@ class AnalysisComponent(Thread):
         os.remove(destination_folder+'/padded_y.png')
 
 
+        del writer
         #writer.add_worksheet("Values")
         if self.stopped():
             return False
